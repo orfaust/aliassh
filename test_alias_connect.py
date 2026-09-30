@@ -38,12 +38,32 @@ class AliasTests(unittest.TestCase):
         self.assertIn("\x1b[1A\r❯", rendered)
 
     def test_action_keys_and_new_alias_guard(self):
-        for key, action in (("r", "rename"), ("d", "delete")):
+        for key, action in (("r", "rename"), ("d", "delete"), ("e", "edit")):
             keys = iter(["\xe0", "P", key])
             with patch.object(alias_connect.os, "name", "nt"), \
                  patch.dict("sys.modules", {"msvcrt": types.SimpleNamespace(getwch=lambda: next(keys))}), \
                  patch.object(alias_connect.sys, "stdout", io.StringIO()):
                 self.assertEqual(alias_connect.choose_alias(["new alias", "server"]), (action, "server"))
+
+    def test_edit_host_values_and_preserve_other_directives(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config"
+            config.write_text("Host work\n    HostName old.example # note\n    User alice\n    Port 2222\n    IdentityFile \"~/.ssh/old\"\n    ForwardAgent yes\nHost other\n    User bob\n")
+            with patch("builtins.input", side_effect=["new.example", "", "22", "-"]):
+                self.assertTrue(alias_connect.change_alias(config, "work", "edit", ["work", "other"]))
+            self.assertEqual(config.read_text(), "Host work\n    HostName new.example # note\n    User alice\n    Port 22\n    ForwardAgent yes\nHost other\n    User bob\n")
+
+    def test_edit_rejects_invalid_port_and_shared_block(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config"
+            original = "Host work\n    HostName example.com\nHost shared another\n    User alice\n"
+            config.write_text(original)
+            with patch("builtins.input", side_effect=["", "", "70000", ""]):
+                self.assertFalse(alias_connect.change_alias(config, "work", "edit", ["work", "shared", "another"]))
+            with patch("builtins.input") as prompt:
+                self.assertFalse(alias_connect.change_alias(config, "shared", "edit", ["work", "shared", "another"]))
+                prompt.assert_not_called()
+            self.assertEqual(config.read_text(), original)
 
     def test_rename_in_included_file_preserves_other_hosts(self):
         with tempfile.TemporaryDirectory() as directory:

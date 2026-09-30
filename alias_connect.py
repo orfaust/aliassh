@@ -63,7 +63,7 @@ def choose_alias(aliases: list[str]) -> str | tuple[str, str] | None:
             char = msvcrt.getwch()
             if char in ("\x00", "\xe0"):
                 return {"H": "up", "P": "down"}.get(msvcrt.getwch(), "other")
-            return {"\r": "enter", "\x1b": "escape", "\x03": "interrupt", "r": "rename", "d": "delete"}.get(char, "other")
+            return {"\r": "enter", "\x1b": "escape", "\x03": "interrupt", "r": "rename", "d": "delete", "e": "edit"}.get(char, "other")
     else:
         import termios
         import tty
@@ -82,13 +82,13 @@ def choose_alias(aliases: list[str]) -> str | tuple[str, str] | None:
                         if sequence == "[" and select.select([sys.stdin], [], [], 0.05)[0]:
                             return {"A": "up", "B": "down"}.get(sys.stdin.read(1), "other")
                     return "escape"
-                return {"\r": "enter", "\n": "enter", "\x03": "interrupt", "r": "rename", "d": "delete"}.get(char, "other")
+                return {"\r": "enter", "\n": "enter", "\x03": "interrupt", "r": "rename", "d": "delete", "e": "edit"}.get(char, "other")
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, previous)
 
     selected = 0
     try:
-        sys.stdout.write("SSH aliases (↑/↓ select, Enter connect, r rename, d delete, Esc quit):\n")
+        sys.stdout.write("SSH aliases (↑/↓ select, Enter connect, e edit, r rename, d delete, Esc quit):\n")
         for index, alias in enumerate(aliases):
             sys.stdout.write(f"{'❯' if index == selected else ' '} {alias}\n")
         sys.stdout.flush()
@@ -96,7 +96,7 @@ def choose_alias(aliases: list[str]) -> str | tuple[str, str] | None:
             pressed = key()
             if pressed == "enter":
                 return aliases[selected]
-            if pressed in ("rename", "delete") and aliases[selected] != NEW_ALIAS:
+            if pressed in ("rename", "delete", "edit") and aliases[selected] != NEW_ALIAS:
                 return pressed, aliases[selected]
             if pressed in ("escape", "interrupt"):
                 return None
@@ -185,6 +185,71 @@ def find_host(config: Path, alias: str, visited: set[Path] | None = None) -> lis
     return matches
 
 
+def edit_host(lines: list[str], index: int, alias: str) -> list[str] | None:
+    """Prompt for connection settings; preserve unrelated SSH directives."""
+    names = HOST_DIRECTIVE.match(lines[index].split("#", 1)[0]).group(1).split()
+    if len(names) != 1:
+        print("This Host block is shared by multiple aliases; config unchanged.", file=sys.stderr)
+        return None
+    end = index + 1
+    while end < len(lines) and not re.match(r"^\s*(Host|Match)\s+", lines[end], re.IGNORECASE):
+        end += 1
+    fields = ("HostName", "User", "Port", "IdentityFile")
+    found: dict[str, int] = {}
+    for position in range(index + 1, end):
+        part = lines[position].strip().split(None, 1)
+        if part and part[0].casefold() in {field.casefold() for field in fields}:
+            name = next(field for field in fields if field.casefold() == part[0].casefold())
+            if name in found:
+                print(f"Multiple {name} entries; config unchanged.", file=sys.stderr)
+                return None
+            found[name] = position
+    defaults = {}
+    for field in fields:
+        parts = lines[found[field]].strip().split(None, 1) if field in found else []
+        value = parts[1].split(" #", 1)[0] if len(parts) > 1 else ""
+        defaults[field] = value.strip().strip('"')
+    defaults["Port"] = defaults["Port"] or "22"
+    print(f"Editing {alias}: press Enter to keep a value; type - to clear the private key.")
+    values = {}
+    for field, label in (("HostName", "Hostname"), ("User", "SSH username"),
+                         ("Port", "Port"), ("IdentityFile", "Private key file")):
+        answer = input(f"{label} [{defaults[field]}]: ").strip()
+        values[field] = defaults[field] if not answer else answer
+    if values["IdentityFile"] == "-":
+        values["IdentityFile"] = ""
+    for field in ("HostName", "User"):
+        value = values[field]
+        if value and (any(char.isspace() or ord(char) < 32 for char in value) or "#" in value):
+            print(f"Invalid {field}.", file=sys.stderr)
+            return None
+    port = values["Port"]
+    if not port.isascii() or not port.isdecimal() or not 1 <= int(port) <= 65535:
+        print("Invalid port (1-65535).", file=sys.stderr)
+        return None
+    identity = values["IdentityFile"]
+    if any(char in identity for char in '\r\n"#'):
+        print("Invalid private key path.", file=sys.stderr)
+        return None
+    values["IdentityFile"] = f'"{identity}"' if identity else ""
+    updated = lines.copy()
+    newline = "\r\n" if lines[index].endswith("\r\n") else "\n"
+    for field in reversed(fields):
+        value = values[field]
+        if field in found:
+            position = found[field]
+            if value:
+                original = lines[position]
+                comment = original[original.index("#"):] if "#" in original else ""
+                comment = comment.rstrip("\r\n")
+                updated[position] = f"    {field} {value}{' ' + comment if comment else ''}{newline}"
+            else:
+                del updated[position]
+        elif value and (field != "Port" or value != "22"):
+            updated.insert(index + 1, f"    {field} {value}{newline}")
+    return updated
+
+
 def change_alias(config: Path, alias: str, action: str, existing: list[str]) -> bool:
     """Edit one unambiguous Host entry; never alter unrelated blocks."""
     try:
@@ -196,7 +261,12 @@ def change_alias(config: Path, alias: str, action: str, existing: list[str]) -> 
         line = lines[index]
         host = HOST_DIRECTIVE.match(line.split("#", 1)[0])
         names = host.group(1).split()
-        if action == "rename":
+        if action == "edit":
+            edited = edit_host(lines, index, alias)
+            if edited is None:
+                return False
+            lines = edited
+        elif action == "rename":
             replacement = input(f"New name for {alias}: ").strip()
             if (not replacement or any(char.isspace() or char in "*?!#" or ord(char) < 32 for char in replacement)
                     or replacement.casefold() == NEW_ALIAS
@@ -231,7 +301,7 @@ def change_alias(config: Path, alias: str, action: str, existing: list[str]) -> 
     except (OSError, UnicodeError, EOFError, KeyboardInterrupt) as exc:
         print(f"Change cancelled or failed: {exc}", file=sys.stderr)
         return False
-    print(f"Alias {alias} {'renamed' if action == 'rename' else 'deleted'} in {path}.")
+    print(f"Alias {alias} {'edited' if action == 'edit' else 'renamed' if action == 'rename' else 'deleted'} in {path}.")
     return True
 
 
