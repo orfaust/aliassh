@@ -1,6 +1,6 @@
 # Alias Connect
 
-A terminal menu for connecting to SSH hosts defined in `~/.ssh/config`.
+A terminal menu for managing SSH aliases in `~/.ssh/config` and connecting to them.
 
 ## Requirements
 
@@ -24,25 +24,37 @@ In **Command Prompt** or Git Bash on Windows, use:
 curl -fsSL https://raw.githubusercontent.com/orfaust/aliassh/main/bootstrap.py | py -
 ```
 
-In a Unix shell, replace `py -` with `python3 -`. PowerShell's `curl` may be an alias for `Invoke-WebRequest`, which does not accept `-fsSL`. The URL must point to the **raw file**, not the repository homepage. The bootstrap downloads the latest `install.py` and `alias_connect.py` from `main` over HTTPS and runs the installer. **Run the same installation command again to update an existing installation**; the launcher and app are replaced without adding duplicate PATH entries. Updates become available after changes are published to `main`. Review the script before piping it into Python if you do not trust the source.
+On macOS or Linux, use:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/orfaust/aliassh/main/bootstrap.py | python3 -
+```
+
+In PowerShell, `curl` may be an alias for `Invoke-WebRequest` and does not accept `-fsSL`. These commands fetch the raw `bootstrap.py` from `main`; it downloads `install.py` and `alias_connect.py` over HTTPS and runs the installer. Review the scripts before piping them into Python. **Rerun the same command to update** after changes are published to `main`: it replaces the app and launcher without duplicating the PATH entry.
 
 Alternatively, from a local checkout run:
 
-```bash
-python install.py
+```sh
+python install.py # use python3 on macOS/Linux
 ```
 
-The installer copies the app to your user directory, creates the `aliassh` command (`aliassh.cmd` on Windows), and adds its directory to your user PATH. Open a new terminal, then run:
+The installer copies `alias_connect.py` to `~/.local/bin` on macOS/Linux or `%USERPROFILE%\AppData\Local\Programs\aliassh` on Windows and creates the `aliassh` launcher (`aliassh.cmd` on Windows). It appends a PATH entry to `~/.profile` on macOS/Linux or to the Windows user PATH. Open a new terminal, then run:
 
-```bash
+```sh
 aliassh
 ```
 
-On Unix the installer updates `~/.profile`; on Windows it updates the user PATH. If your shell does not load `~/.profile`, add `~/.local/bin` to that shell's startup file. No administrator rights or Python packages are required. To run directly without installing, use `python alias_connect.py`.
+If your shell does not load `~/.profile`, add `~/.local/bin` to that shell's startup file. No administrator rights or third-party Python packages are required. To run without installing, use `python alias_connect.py` from the repository directory (or `python3 alias_connect.py` on macOS/Linux).
 
-Use **↑/↓** to select an entry, **Enter** to connect, **e** to edit connection settings, **r** to rename, **d** to delete, or **Esc** to quit. Deletion requires typing `yes` to confirm. Edit prompts for hostname, username, port and private key: press Enter to keep a value or type `-` to remove the private key. Editing a `Host` block shared by multiple aliases is disabled to avoid changing other aliases. Edit, rename and delete update the `Host` definition in the config file where it is declared (including locally included files); if an alias appears in multiple `Host` directives, neither action changes it. Existing aliases are listed alphabetically, ignoring case. Selecting an alias with Enter runs `ssh <alias>` in the current terminal.
+## Usage
 
-The first entry, **new alias**, prompts for an alias name, hostname (IP address or domain), SSH username, port (defaults to `22`), and an optional private key file path. It appends a `Host` block to `~/.ssh/config` without starting a connection. The config file is created if it does not exist. For example:
+1. Run `aliassh` in an interactive terminal. The first entry is **new alias**; existing aliases follow in case-insensitive alphabetical order.
+2. Use **↑/↓** to select an entry. Press **Enter** to connect (`ssh <alias>`), or **Esc** to quit.
+3. On an existing alias, press **e** to edit its hostname, username, port or private key; **r** to rename it; or **d** to delete it. Deletion requires typing `yes` exactly.
+
+When editing, press Enter at a prompt to retain the current value, or type `-` at the private-key prompt to remove the key. Editing a `Host` block shared by multiple aliases is disabled; renaming changes only the selected name, and deleting removes only that name (the shared block remains for the others). Changes are made in the file where the `Host` is declared, including local `Include` files. An alias defined in more than one `Host` directive cannot be edited, renamed or deleted.
+
+Select **new alias** and press Enter to provide a name, hostname (IP address or domain), SSH username, port (press Enter for `22`) and optional private key path. The app appends a `Host` block to `~/.ssh/config` without starting a connection; it creates the file if needed. For example:
 
 ```sshconfig
 Host my-server
@@ -52,10 +64,10 @@ Host my-server
     IdentityFile "~/.ssh/id_ed25519"
 ```
 
-The menu includes explicit `Host` names from `~/.ssh/config` and locally included config files. SSH wildcard patterns containing `*`, `?`, or `!` are not selectable.
+The menu includes explicit `Host` names from `~/.ssh/config` and local files referenced by `Include`. Wildcard patterns containing `*`, `?` or `!` are not selectable.
 
 ## Tests
 
-```bash
-python -m unittest discover -v
+```sh
+python -m unittest discover -v # use python3 on macOS/Linux
 ```
