@@ -1,0 +1,26 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local environments and packaging output
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Local pi agent state
+.pi/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
