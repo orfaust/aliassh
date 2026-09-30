@@ -24,7 +24,7 @@ In **Command Prompt** or Git Bash on Windows, use:
 curl -fsSL https://raw.githubusercontent.com/orfaust/aliassh/main/bootstrap.py | py -
 ```
 
-In a Unix shell, replace `py -` with `python3 -`. PowerShell's `curl` may be an alias for `Invoke-WebRequest`, which does not accept `-fsSL`. The URL must point to the **raw file**, not the repository homepage. The bootstrap downloads `install.py` and `alias_connect.py` over HTTPS and runs the installer. Review the script before piping it into Python if you do not trust the source.
+In a Unix shell, replace `py -` with `python3 -`. PowerShell's `curl` may be an alias for `Invoke-WebRequest`, which does not accept `-fsSL`. The URL must point to the **raw file**, not the repository homepage. The bootstrap downloads the latest `install.py` and `alias_connect.py` from `main` over HTTPS and runs the installer. **Run the same installation command again to update an existing installation**; the launcher and app are replaced without adding duplicate PATH entries. Updates become available after changes are published to `main`. Review the script before piping it into Python if you do not trust the source.
 
 Alternatively, from a local checkout run:
 

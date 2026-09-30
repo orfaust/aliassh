@@ -6,6 +6,7 @@ import os
 import shutil
 import stat
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -32,10 +33,23 @@ def install(home: Path | None = None, platform: str | None = None) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / "alias_connect.py"
     if SOURCE != destination:
-        shutil.copyfile(SOURCE, destination)
-    launcher.write_text(command, encoding="utf-8")
-    if platform != "nt":
-        launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        # Replace complete files, never leave a truncated app after an interrupted update.
+        with tempfile.NamedTemporaryFile(dir=directory, delete=False) as output:
+            temporary = Path(output.name)
+        try:
+            shutil.copyfile(SOURCE, temporary)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", dir=directory, delete=False) as output:
+        temporary = Path(output.name)
+        output.write(command)
+    try:
+        if platform != "nt":
+            temporary.chmod(temporary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.replace(temporary, launcher)
+    finally:
+        temporary.unlink(missing_ok=True)
     return launcher
 
 

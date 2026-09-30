@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -21,7 +22,11 @@ def bootstrap() -> int:
         with tempfile.TemporaryDirectory(prefix="aliassh-") as directory:
             root = Path(directory)
             for name in FILES:
-                with urllib.request.urlopen(RAW_BASE + name, timeout=20) as response:
+                request = urllib.request.Request(
+                    f"{RAW_BASE}{name}?refresh={time.time_ns()}",
+                    headers={"Cache-Control": "no-cache"},
+                )
+                with urllib.request.urlopen(request, timeout=20) as response:
                     content = response.read(MAX_FILE_BYTES + 1)
                 if len(content) > MAX_FILE_BYTES:
                     raise ValueError(f"Download too large: {name}")
