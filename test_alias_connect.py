@@ -1,4 +1,5 @@
 import io
+import json
 import tempfile
 import types
 import unittest
@@ -148,6 +149,44 @@ class AliasTests(unittest.TestCase):
                 self.assertEqual(alias_connect.main(), 0)
                 call.assert_not_called()
             self.assertEqual(alias_connect.read_aliases(config), ["new"])
+
+    def test_update_skips_when_current(self):
+        with tempfile.TemporaryDirectory() as directory:
+            version = Path(directory) / ".aliassh-version"
+            version.write_text("a" * 40 + "\n")
+            with patch.object(alias_connect, "__file__", str(Path(directory) / "alias_connect.py")), \
+                 patch.object(alias_connect.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps({"sha": "a" * 40}).encode())) as fetch, \
+                 patch.object(alias_connect.subprocess, "call") as run:
+                self.assertEqual(alias_connect.main(("update",)), 0)
+                fetch.assert_called_once()
+                run.assert_not_called()
+
+    def test_update_downloads_pinned_bootstrap(self):
+        commit = "b" * 40
+        urls = []
+
+        def fetch(request, timeout):
+            url = request.full_url if hasattr(request, "full_url") else request
+            urls.append(url)
+            if "api.github.com" in url:
+                return io.BytesIO(json.dumps({"sha": commit}).encode())
+            return io.BytesIO(b"print('install')")
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(alias_connect, "__file__", str(Path(directory) / "alias_connect.py")), \
+                 patch.object(alias_connect.urllib.request, "urlopen", side_effect=fetch), \
+                 patch.object(alias_connect.subprocess, "call", return_value=0) as run:
+                self.assertEqual(alias_connect.main(("update",)), 0)
+                command = run.call_args.args[0]
+                self.assertEqual(command[:2], [alias_connect.sys.executable, "-c"])
+                self.assertEqual(run.call_args.kwargs["env"]["ALIASSH_REF"], commit)
+                self.assertIn(f"/{commit}/bootstrap.py", urls[1])
+
+    def test_update_fails_without_running_installer_on_network_error(self):
+        with patch.object(alias_connect.urllib.request, "urlopen", side_effect=OSError("offline")), \
+             patch.object(alias_connect.subprocess, "call") as run:
+            self.assertEqual(alias_connect.main(("update",)), 1)
+            run.assert_not_called()
 
     def test_connection_uses_argument_list(self):
         with tempfile.TemporaryDirectory() as directory:

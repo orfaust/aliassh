@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 import sys
@@ -20,6 +21,9 @@ def install(home: Path | None = None, platform: str | None = None) -> Path:
         raise FileNotFoundError(f"Missing {SOURCE}")
     if sys.version_info < (3, 10):
         raise RuntimeError("Python 3.10 or newer is required")
+    commit = os.environ.get("ALIASSH_REF", "")
+    if commit and not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("Invalid installation commit")
 
     if platform == "nt":
         directory = home / "AppData" / "Local" / "Programs" / "aliassh"
@@ -50,6 +54,11 @@ def install(home: Path | None = None, platform: str | None = None) -> Path:
         os.replace(temporary, launcher)
     finally:
         temporary.unlink(missing_ok=True)
+    version_file = directory / ".aliassh-version"
+    if commit:
+        version_file.write_text(commit + "\n", encoding="ascii")
+    else:
+        version_file.unlink(missing_ok=True)  # Local installs have no known upstream version.
     return launcher
 
 
@@ -82,7 +91,7 @@ def main() -> int:
     try:
         launcher = install()
         path_changed = ensure_user_path(launcher.parent, Path.home(), os.name)
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         print(f"Installation failed: {exc}", file=sys.stderr)
         return 1
     print(f"Installed: {launcher}")

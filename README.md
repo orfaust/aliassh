@@ -46,6 +46,14 @@ aliassh
 
 If your shell does not load `~/.profile`, add `~/.local/bin` to that shell's startup file. No administrator rights or third-party Python packages are required. To run without installing, use `python alias_connect.py` from the repository directory (or `python3 alias_connect.py` on macOS/Linux).
 
+To check for a newer commit and update only when needed, run:
+
+```sh
+aliassh update
+```
+
+This checks GitHub's `main` branch, downloads files pinned to the reported commit, and records the installed commit. It requires internet access. Older installations need to run the installation command above once to gain the `update` command. For local installs without a recorded commit, the first update installs the current upstream release.
+
 ## Usage
 
 1. Run `aliassh` in an interactive terminal. The first entry is **new alias**; existing aliases follow in case-insensitive alphabetical order.

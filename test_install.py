@@ -35,6 +35,17 @@ class InstallTests(unittest.TestCase):
             self.assertIn("from alias_connect import main", launcher.read_text())
             self.assertEqual((home / ".profile").read_text().count("# aliassh"), 1)
 
+    def test_installed_version_is_written_only_for_pinned_downloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            with patch.dict(install.os.environ, {"ALIASSH_REF": "c" * 40}):
+                launcher = install.install(home, "posix")
+            version = launcher.parent / ".aliassh-version"
+            self.assertEqual(version.read_text().strip(), "c" * 40)
+            with patch.dict(install.os.environ, {"ALIASSH_REF": ""}):
+                install.install(home, "posix")
+            self.assertFalse(version.exists())
+
     def test_windows_launcher(self):
         with tempfile.TemporaryDirectory() as tmp:
             launcher = install.install(Path(tmp), "nt")

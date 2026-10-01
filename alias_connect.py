@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from pathlib import Path
 
 HOST_DIRECTIVE = re.compile(r"^\s*Host\s+(.*?)\s*$", re.IGNORECASE)
@@ -305,7 +307,45 @@ def change_alias(config: Path, alias: str, action: str, existing: list[str]) -> 
     return True
 
 
-def main() -> int:
+def update_app() -> int:
+    """Check main's commit and reinstall only when it differs from the installed one."""
+    version_file = Path(__file__).resolve().parent / ".aliassh-version"
+    try:
+        request = urllib.request.Request(
+            "https://api.github.com/repos/orfaust/aliassh/commits/main",
+            headers={"Accept": "application/vnd.github+json", "Cache-Control": "no-cache"},
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            commit = json.load(response)["sha"]
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise ValueError("Invalid commit from GitHub")
+        current = version_file.read_text(encoding="ascii").strip() if version_file.exists() else None
+        if current == commit:
+            print(f"Already up to date ({commit[:7]}).")
+            return 0
+        print(f"Updating aliassh to {commit[:7]}...", flush=True)
+        url = f"https://raw.githubusercontent.com/orfaust/aliassh/{commit}/bootstrap.py"
+        with urllib.request.urlopen(url, timeout=20) as response:
+            script = response.read(1024 * 1024 + 1)
+        if not script or len(script) > 1024 * 1024:
+            raise ValueError("Invalid bootstrap download")
+        environment = os.environ.copy()
+        environment["ALIASSH_REF"] = commit
+        result = subprocess.call([sys.executable, "-c", script.decode("utf-8")], env=environment)
+        if result == 0:
+            print(f"Updated to {commit[:7]}.")
+        return result
+    except (OSError, ValueError, KeyError, UnicodeError) as exc:
+        print(f"Update failed: {exc}", file=sys.stderr)
+        return 1
+
+
+def main(args: tuple[str, ...] = ()) -> int:
+    if args == ("update",):
+        return update_app()
+    if args:
+        print("Usage: aliassh [update]", file=sys.stderr)
+        return 2
     config = Path.home() / ".ssh" / "config"
     try:
         aliases = read_aliases(config)
@@ -335,4 +375,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(tuple(sys.argv[1:])))
