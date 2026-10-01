@@ -187,7 +187,13 @@ def find_host(config: Path, alias: str, visited: set[Path] | None = None) -> lis
     return matches
 
 
-def edit_host(lines: list[str], index: int, alias: str) -> list[str] | None:
+def valid_alias(name: str, existing: list[str], current: str | None = None) -> bool:
+    return (bool(name) and not any(char.isspace() or char in "*?!#" or ord(char) < 32 for char in name)
+            and name.casefold() != NEW_ALIAS
+            and (name == current or name.casefold() not in {item.casefold() for item in existing}))
+
+
+def edit_host(lines: list[str], index: int, alias: str, existing: list[str]) -> list[str] | None:
     """Prompt for connection settings; preserve unrelated SSH directives."""
     names = HOST_DIRECTIVE.match(lines[index].split("#", 1)[0]).group(1).split()
     if len(names) != 1:
@@ -213,6 +219,10 @@ def edit_host(lines: list[str], index: int, alias: str) -> list[str] | None:
         defaults[field] = value.strip().strip('"')
     defaults["Port"] = defaults["Port"] or "22"
     print(f"Editing {alias}: press Enter to keep a value; type - to clear the private key.")
+    new_alias = input(f"Alias name [{alias}]: ").strip() or alias
+    if not valid_alias(new_alias, existing, current=alias):
+        print("Invalid alias or alias already exists.", file=sys.stderr)
+        return None
     values = {}
     for field, label in (("HostName", "Hostname"), ("User", "SSH username"),
                          ("Port", "Port"), ("IdentityFile", "Private key file")):
@@ -235,6 +245,12 @@ def edit_host(lines: list[str], index: int, alias: str) -> list[str] | None:
         return None
     values["IdentityFile"] = f'"{identity}"' if identity else ""
     updated = lines.copy()
+    if new_alias != alias:
+        updated[index] = re.sub(
+            r"^(\s*Host\s+)[^#\r\n]*",
+            lambda m: m.group(1) + new_alias + re.search(r"\s*$", m.group(0)).group(),
+            lines[index], count=1, flags=re.IGNORECASE,
+        )
     newline = "\r\n" if lines[index].endswith("\r\n") else "\n"
     for field in reversed(fields):
         value = values[field]
@@ -264,15 +280,13 @@ def change_alias(config: Path, alias: str, action: str, existing: list[str]) -> 
         host = HOST_DIRECTIVE.match(line.split("#", 1)[0])
         names = host.group(1).split()
         if action == "edit":
-            edited = edit_host(lines, index, alias)
+            edited = edit_host(lines, index, alias, existing)
             if edited is None:
                 return False
             lines = edited
         elif action == "rename":
             replacement = input(f"New name for {alias}: ").strip()
-            if (not replacement or any(char.isspace() or char in "*?!#" or ord(char) < 32 for char in replacement)
-                    or replacement.casefold() == NEW_ALIAS
-                    or replacement.casefold() in {name.casefold() for name in existing}):
+            if not valid_alias(replacement, existing):
                 print("Invalid alias or alias already exists.", file=sys.stderr)
                 return False
             names[names.index(alias)] = replacement

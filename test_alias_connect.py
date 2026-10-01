@@ -50,7 +50,7 @@ class AliasTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config"
             config.write_text("Host work\n    HostName old.example # note\n    User alice\n    Port 2222\n    IdentityFile \"~/.ssh/old\"\n    ForwardAgent yes\nHost other\n    User bob\n")
-            with patch("builtins.input", side_effect=["new.example", "", "22", "-"]):
+            with patch("builtins.input", side_effect=["", "new.example", "", "22", "-"]):
                 self.assertTrue(alias_connect.change_alias(config, "work", "edit", ["work", "other"]))
             self.assertEqual(config.read_text(), "Host work\n    HostName new.example # note\n    User alice\n    Port 22\n    ForwardAgent yes\nHost other\n    User bob\n")
 
@@ -59,12 +59,35 @@ class AliasTests(unittest.TestCase):
             config = Path(directory) / "config"
             original = "Host work\n    HostName example.com\nHost shared another\n    User alice\n"
             config.write_text(original)
-            with patch("builtins.input", side_effect=["", "", "70000", ""]):
+            with patch("builtins.input", side_effect=["", "", "", "70000", ""]):
                 self.assertFalse(alias_connect.change_alias(config, "work", "edit", ["work", "shared", "another"]))
             with patch("builtins.input") as prompt:
                 self.assertFalse(alias_connect.change_alias(config, "shared", "edit", ["work", "shared", "another"]))
                 prompt.assert_not_called()
             self.assertEqual(config.read_text(), original)
+
+    def test_edit_renames_alias_in_included_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config"
+            config.write_text("Include extra.conf\nHost local\n")
+            extra = root / "extra.conf"
+            extra.write_text("Host old # note\n    HostName example.com\n    ForwardAgent yes\n")
+            with patch("builtins.input", side_effect=["new", "", "", "", ""]):
+                self.assertTrue(alias_connect.change_alias(config, "old", "edit", ["old", "local"]))
+            self.assertIn("Host new # note\n", extra.read_text())
+            self.assertIn("    ForwardAgent yes\n", extra.read_text())
+            self.assertEqual(alias_connect.read_aliases(config), ["new", "local"])
+
+    def test_edit_rejects_duplicate_or_invalid_alias_without_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config"
+            original = "Host old\n    HostName example.com\nHost other\n"
+            config.write_text(original)
+            for name in ("OTHER", "bad name", "*.wildcard", "new alias"):
+                with self.subTest(name=name), patch("builtins.input", return_value=name):
+                    self.assertFalse(alias_connect.change_alias(config, "old", "edit", ["old", "other"]))
+                self.assertEqual(config.read_text(), original)
 
     def test_rename_in_included_file_preserves_other_hosts(self):
         with tempfile.TemporaryDirectory() as directory:

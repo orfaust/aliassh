@@ -12,7 +12,7 @@
 - Never use the real `~/.ssh/config`, SSH keys, or user PATH for tests. Use temporary directories and mocks; never initiate a real SSH connection in tests.
 - Preserve unrelated SSH directives and the originating file when editing included hosts. Reject ambiguous duplicate definitions and shared `Host` blocks when edits could affect other aliases. Require explicit confirmation before deleting an alias.
 - Keep alias input validation and atomic file replacement for edits; do not interpolate alias names into a shell command.
-- The menu supports Enter (connect), e (edit connection fields), r (rename), d (delete), Esc (quit), and arrow keys. `new alias` is always first; remaining entries are alphabetical.
+- The menu supports Enter (connect), e (edit alias name and connection fields), r (rename), d (delete), Esc (quit), and arrow keys. `new alias` is always first; remaining entries are alphabetical.
 - Installation changes the user's PATH/profile. Do not run `python install.py` during validation against a real home directory. Already installed users must reinstall once to receive new CLI features; after that `aliassh update` handles published commits. Mock GitHub API and raw downloads in tests.
 
 ## Verification

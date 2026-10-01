@@ -58,9 +58,9 @@ This checks GitHub's `main` branch, downloads files pinned to the reported commi
 
 1. Run `aliassh` in an interactive terminal. The first entry is **new alias**; existing aliases follow in case-insensitive alphabetical order.
 2. Use **↑/↓** to select an entry. Press **Enter** to connect (`ssh <alias>`), or **Esc** to quit.
-3. On an existing alias, press **e** to edit its hostname, username, port or private key; **r** to rename it; or **d** to delete it. Deletion requires typing `yes` exactly.
+3. On an existing alias, press **e** to edit its alias name, hostname, username, port or private key; **r** to rename it; or **d** to delete it. Deletion requires typing `yes` exactly.
 
-When editing, press Enter at a prompt to retain the current value, or type `-` at the private-key prompt to remove the key. Editing a `Host` block shared by multiple aliases is disabled; renaming changes only the selected name, and deleting removes only that name (the shared block remains for the others). Changes are made in the file where the `Host` is declared, including local `Include` files. An alias defined in more than one `Host` directive cannot be edited, renamed or deleted.
+When editing, press Enter at a prompt to retain the current value (including the alias name), or type `-` at the private-key prompt to remove the key. A new alias name must be unique and cannot contain spaces or SSH wildcard characters. Editing a `Host` block shared by multiple aliases is disabled; renaming changes only the selected name, and deleting removes only that name (the shared block remains for the others). Changes are made in the file where the `Host` is declared, including local `Include` files. An alias defined in more than one `Host` directive cannot be edited, renamed or deleted.
 
 Select **new alias** and press Enter to provide a name, hostname (IP address or domain), SSH username, port (press Enter for `22`) and optional private key path. The app appends a `Host` block to `~/.ssh/config` without starting a connection; it creates the file if needed. For example:
 
